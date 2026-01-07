@@ -15,13 +15,12 @@ from pillow_heif import register_heif_opener
 from tkinter import *
 from tkinter import messagebox
 from tkinter import ttk
-from tkinter import Tk
 from tkinter.filedialog import askdirectory
-
+from widgetWrapper import WidgetWrapper
 
 register_heif_opener()
 
-orgRoot = None
+rootWindow = None
 secondWindow = None
 directory = 'C:\\Users\\DareA\\Downloads\\PhotoOverhaul\\Photos'
 saveDir = 'C:\\Users\\DareA\\Downloads\\PhotoOverhaul\\FinalPhotos\\{}'
@@ -34,138 +33,55 @@ colorInt=0
 textBox = None
 listBox = None
 chosenFolder = ''
-recurse = None
+isRecursive = None
 filePathsToWorkWith = []
 textBoxText = []
-recursedFolders = []
+isRecursivedFolders = []
 
-class WidgetView:
-    def __init__(this, widgetType, parent=None, widgetTitle='', widgetText='', widgetCommand=None, style=None):
-        this.parent = parent
-        this.pady = 0
-        this.padx = 0
-        this.cumulativePady = 0
-        this.cumulativePadx = 0
-        if widgetType == 'root':
-            this.widget = Tk()
-        elif widgetType == 'frame':
-            if not parent:
-                print('NEEDS PARENT WIDGET')
-                sys.exit(-1)
-            this.widget = ttk.Frame(parent.widget, padding=10, style=style)
-            this.pady = 10
-            this.padx = 10
-            this.cumulativePady = this.pady if not this.parent else this.pady + this.parent.cumulativePady
-            this.cumulativePadx = this.padx if not this.parent else this.padx + this.parent.cumulativePadx
-            #colorInt += 1
-        elif widgetType == 'label':
-            if not parent:
-                print('NEEDS PARENT WIDGET')
-                sys.exit(-1)
-            this.widget = ttk.Label(parent.widget, text=widgetText)
-        elif widgetType == 'listbox':
-            if not parent:
-                print('NEEDS PARENT WIDGET')
-                sys.exit(-1)
-            this.widget = Listbox(parent.widget)
-        elif widgetType == 'text':
-            if not parent:
-                print('NEEDS PARENT WIDGET')
-                sys.exit(-1)
-            this.widget = Text(parent.widget)
-        elif widgetType == 'button':
-            if not parent:
-                print('NEEDS PARENT WIDGET')
-                sys.exit(-1)
-            this.widget = ttk.Button(parent.widget, text=widgetText, command=widgetCommand)
-        
-        if widgetTitle:
-            this.widget.title(widgetTitle)
-    def insertIntoGrid(this, col=-1, r=-1,stretch=False, padx=10, pady=10):
-        if col >= 0 and r >= 0:
-            if stretch:
-                this.widget.grid(column=col, row=r, sticky=(N, S, E, W))
-            else:
-                this.widget.grid(column=col, row=r)
-            this.widget.grid_configure(padx=padx, pady=pady)
-            this.pady = 10
-            this.padx = 10
-        else:
-            this.widget.grid(sticky=(N, S, E, W))
-        this.cumulativePady = this.pady if not this.parent else this.pady + this.parent.cumulativePady
-        this.cumulativePadx = this.padx if not this.parent else this.padx + this.parent.cumulativePadx
-        return this
-
-    def resizeWidget(this,x=-1,y=-1,frac=False, depth=0):
-        if frac:
-            print('x and y fraction:',x,y)
-            this.parent.widget.update_idletasks()
-            parentWidth = this.parent.widget.winfo_width()
-            parentHeight = this.parent.widget.winfo_height()
-            print('parent sizes:', parentWidth, parentHeight)
-            x = int((1000-(depth*20)) * x)
-            y = int((1000-(depth*20)) * y)
-            print('x and y after:',x,y)
-        this.widget.update_idletasks()
-        try:
-            this.widget.geometry('{}x{}+0+0'.format(x,y))
-        except:
-            this.widget.configure(width=x, height=y)
-        return this
-    def printSize(this):
-        this.widget.update_idletasks()
-        print('width:', this.widget.winfo_width())
-        print('height:', this.widget.winfo_height())
-        return this
-    def lock(this):
-        this.widget.grab_set()
-        print('LOCKED')
-        return this
-    def unlock(this):
-        this.widget.grab_release()
-        print('UNLOCKED')
-        return this
-    def unshow(this):
-        this.widget.withdraw()
-        return this
-    def show(this):
-        this.widget.deiconify()
-        return this
-
-def openPhotoOrganizerGUI():
-    global textBox, listBox, recurse, orgRoot
-    orgRoot = WidgetView('root', widgetTitle='Photo Organizer')
-    #orgRoot.resizeWidget(1000,1000)
+def configureStyles():
     s = ttk.Style()
-    s.configure('red.TFrame', background='#454545')
-    s.configure('orange.TFrame', background='#ffd6f1')
-    s.configure('blue.TFrame', background='#454545')
-    orgFrame = WidgetView('frame',orgRoot,style='orange.TFrame').insertIntoGrid(0, 0, stretch=True)#.resizeWidget(1,1,frac=True, depth=2)
-    orgFrame.widget.columnconfigure(0, weight=1)
-    orgFrame.widget.columnconfigure(1, weight=4)
-    optionsFrame = WidgetView('frame',orgFrame,style='red.TFrame').insertIntoGrid(0, 0)#.resizeWidget(1,1,frac=True, depth=3)
-    folderButton = WidgetView('button',optionsFrame, widgetText='Choose Folder', widgetCommand=openFolderChooser).insertIntoGrid(0, 0)
-    randomLabel = WidgetView('label',optionsFrame, widgetText='Recursive Search?').insertIntoGrid(0, 1, pady=0)
-    recursionFrame = WidgetView('frame', optionsFrame).insertIntoGrid(0,2,pady=0)
-    recurse = BooleanVar(recursionFrame.widget, False)
-    recursionTrue = Radiobutton(recursionFrame.widget, text='Yes', variable=recurse, value=True)
-    recursionTrue.grid(column=0,row=0, pady=0)
-    recursionFalse = Radiobutton(recursionFrame.widget, text='No', variable=recurse, value=False)
-    recursionFalse.grid(column=1,row=0, pady=0)
-    fileExplorerFrame = WidgetView('frame',orgFrame,style='blue.TFrame').insertIntoGrid(1, 0)#.resizeWidget(.5,.5,frac=True)
-    fileExplorerFrame.widget.columnconfigure(0, weight=1)
-    metadataButton = WidgetView('button',optionsFrame, widgetText='Show Metadata', widgetCommand=showMetaData).insertIntoGrid(0, 3)
-    processButton = WidgetView('button',optionsFrame, widgetText='Process Photos', widgetCommand=openProcessPhotoWindow).insertIntoGrid(0, 4)
-    quitButton = WidgetView('button',optionsFrame, widgetText='Quit', widgetCommand=orgRoot.widget.destroy).insertIntoGrid(0, 5)
+    s.configure('gray.TFrame', background='#454545')
+    s.configure('pink.TFrame', background='#ffd6f1')
+    s.configure('dkpink.TFrame', background="#ffade4")
     
-    textBox = WidgetView('label', fileExplorerFrame, widgetText='').insertIntoGrid(0,0)#.resizeWidget(100,50)
+def openPhotoOrganizerGUI():
+    global textBox, listBox, isRecursive, rootWindow
+    rootWindow = WidgetWrapper('root', widgetTitle='Photo Organizer')
+    configureStyles()
+    #rootWindow.resizeWidget(1000,1000)
+    layoutFrame = WidgetWrapper('frame',rootWindow,style='pink.TFrame').insertIntoGrid(0, 0, stretch=True)#.resizeWidget(1,1,frac=True, depth=2)
+    layoutFrame.widget.columnconfigure(0, weight=1)
+    layoutFrame.widget.columnconfigure(1, weight=4)
+    
+    leftOptionsFrame = WidgetWrapper('frame',layoutFrame,style='gray.TFrame').insertIntoGrid(0, 0)#.resizeWidget(1,1,frac=True, depth=3)
+    
+    chooseFolderButton = WidgetWrapper('button',leftOptionsFrame, widgetText='Choose Folder', widgetCommand=openFolderChooser).insertIntoGrid(0, 0)
+    
+    recursiveSearchLabel = WidgetWrapper('label',leftOptionsFrame, widgetText='Recursive Search?').insertIntoGrid(0, 1, pady=0)
+    
+    recursionFrame = WidgetWrapper('frame', leftOptionsFrame).insertIntoGrid(0,2,pady=0)
+    
+    isRecursive = BooleanVar(recursionFrame.widget, False)
+    
+    recursionTrueRadio = WidgetWrapper('radio', recursionFrame, widgetText='Yes', variable=isRecursive).insertIntoGrid(0,0,pady=0)
+    
+    recursionFalseRadio = WidgetWrapper('radio', recursionFrame, widgetText='No', variable=isRecursive).insertIntoGrid(1,0,pady=0)
+    
+    rightFileExplorerFrame = WidgetWrapper('frame',layoutFrame,style='gray.TFrame').insertIntoGrid(1, 0)#.resizeWidget(.5,.5,frac=True)
+    rightFileExplorerFrame.widget.columnconfigure(0, weight=1)
+    
+    metadataButton = WidgetWrapper('button',leftOptionsFrame, widgetText='Show Metadata', widgetCommand=showMetaData).insertIntoGrid(0, 3)
+    processButton = WidgetWrapper('button',leftOptionsFrame, widgetText='Process Photos', widgetCommand=openProcessPhotoWindow).insertIntoGrid(0, 4)
+    quitButton = WidgetWrapper('button',leftOptionsFrame, widgetText='Quit', widgetCommand=rootWindow.widget.destroy).insertIntoGrid(0, 5)
+    
+    textBox = WidgetWrapper('label', rightFileExplorerFrame, widgetText='BLEH').insertIntoGrid(0,0)#.resizeWidget(100,50)
     
     resetTextBoxText()
-    listBox = WidgetView('listbox', fileExplorerFrame).insertIntoGrid(0,1).resizeWidget(120, 50)
+    listBox = WidgetWrapper('listbox', rightFileExplorerFrame).insertIntoGrid(0,1).resizeWidget(120, 50)
     listBox.widget.bind('<<ListboxSelect>>', switchMetaData)
     addPathsToListBox()
-    recurse.trace('w', recurseRadioSwitch)
-    orgRoot.widget.mainloop()
+    isRecursive.trace('w', isRecursiveRadioSwitch)
+    rootWindow.widget.mainloop()
     
 def switchMetaData(a):
     global listBox
@@ -190,24 +106,24 @@ def showMetaData():
         mess = 'No metadata'
     messagebox.showinfo('Metadata', mess)
 def openProcessPhotoWindow():
-    global filePathsToWorkWith, listBox, secondWindow, orgRoot
+    global filePathsToWorkWith, listBox, secondWindow, rootWindow
     mess = 'Select your options:'
     #messagebox.showinfo('Process Photos', mess)
-    secondWindow = Toplevel(orgRoot.widget)
+    secondWindow = Toplevel(rootWindow.widget)
     secondWindow.title('Options')
     secondWindow.geometry('100x100')
     secondWindow.bind('<Escape>', secondWindowClosed)
     secondWindow.protocol('WM_DELETE_WINDOW', secondWindowClosed)
     secondWindow.grab_set()
     secondWindow.focus()
-    #orgRoot.lock()
+    #rootWindow.lock()
     
 def secondWindowClosed(this=None):
-    global secondWindow, orgRoot
+    global secondWindow, rootWindow
     print('BLEH CLOSED')
     secondWindow.destroy()
     secondWindow.grab_release()
-    #orgRoot.unlock()
+    #rootWindow.unlock()
     
 def deleteAllFromListBox():
     global listBox
@@ -236,8 +152,8 @@ def resetFilePaths():
     filePathsToWorkWith = []
     deleteAllFromListBox()
 def resetRecursedFolders():
-    global recursedFolders
-    recursedFolders = []
+    global isRecursivedFolders
+    isRecursivedFolders = []
     
 def getFilesFromChosenFolder(fold=None):
     feFiles = os.listdir(fold) if fold else os.listdir(chosenFolder)
@@ -252,13 +168,13 @@ def getFilesFromChosenFolder(fold=None):
             i = i + 1
 
 def getFilesFromChosenFolderRecurse(fold=None):
-    global recursedFolders
+    global isRecursivedFolders
     if not fold:
         fold = chosenFolder
-    if fold in recursedFolders:
+    if fold in isRecursivedFolders:
         return
     else:
-        recursedFolders.append(fold)
+        isRecursivedFolders.append(fold)
     try:
         feFiles = os.listdir(fold)
     except:
@@ -274,15 +190,15 @@ def getFilesFromChosenFolderRecurse(fold=None):
             print(wholePath)
             getFilesFromChosenFolderRecurse(wholePath)
             
-def recurseRadioSwitch(a,b,c):
-    #print('recurseRadioSwitch',a,b,c)
+def isRecursiveRadioSwitch(a,b,c):
+    #print('isRecursiveRadioSwitch',a,b,c)
     updateTextBox()
     
 def updateTextBox():
-    global textBoxText, recurse, recursedFolders
+    global textBoxText, isRecursive, isRecursivedFolders
     resetTextBoxText()
     resetFilePaths()
-    if recurse.get():
+    if isRecursive.get():
         resetRecursedFolders()
         getFilesFromChosenFolderRecurse()
     else:
