@@ -1,4 +1,4 @@
-from tkinter import ttk
+from tkinter import messagebox, ttk
 from tkinter import Tk
 from tkinter import *
 import sys
@@ -46,6 +46,11 @@ class WidgetWrapper:
                 print('NEEDS PARENT WIDGET')
                 sys.exit(-1)
             this.widget = Radiobutton(parent.widget, text=widgetText, variable=variable, value=False)
+        elif widgetType == 'booleanvar':
+            if not parent:
+                print('NEEDS PARENT WIDGET')
+                sys.exit(-1)
+            this.widget = BooleanVar(parent.widget, variable)
         
         if widgetTitle:
             this.widget.title(widgetTitle)
@@ -99,3 +104,6 @@ class WidgetWrapper:
     def show(this):
         this.widget.deiconify()
         return this
+
+def CreateMessageBox(title, mess):
+    messagebox.showinfo(title, mess)

@@ -1,22 +1,21 @@
 import PIL
 import os
 import re
-import math
-import sys
-import extcolors
-import numpy as np
-import json
-from tkinter.filedialog import askopenfilename
+#import math
+#import sys
+#import extcolors
+#import numpy as np
+#import json
+#from tkinter.filedialog import askopenfilename
 import shutil
-from PIL import ExifTags
-import zipfile
+#from PIL import ExifTags
+#import zipfile
 import main
 from pillow_heif import register_heif_opener
 from tkinter import *
-from tkinter import messagebox
 from tkinter import ttk
 from tkinter.filedialog import askdirectory
-from widgetWrapper import WidgetWrapper
+from widgetWrapper import WidgetWrapper, CreateMessageBox
 
 register_heif_opener()
 
@@ -61,7 +60,7 @@ def openPhotoOrganizerGUI():
     
     recursionFrame = WidgetWrapper('frame', leftOptionsFrame).insertIntoGrid(0,2,pady=0)
     
-    isRecursive = BooleanVar(recursionFrame.widget, False)
+    isRecursive = WidgetWrapper('booleanvar', recursionFrame, variable=False).widget
     
     recursionTrueRadio = WidgetWrapper('radio', recursionFrame, widgetText='Yes', variable=isRecursive).insertIntoGrid(0,0,pady=0)
     
@@ -104,7 +103,7 @@ def showMetaData():
     
     if mess == '':
         mess = 'No metadata'
-    messagebox.showinfo('Metadata', mess)
+    CreateMessageBox('Metadata', mess)
 def openProcessPhotoWindow():
     global filePathsToWorkWith, listBox, secondWindow, rootWindow
     mess = 'Select your options:'
