@@ -72,7 +72,7 @@ export function OptionsPanel({
       )}
 
       <p style={{ fontSize: '0.75rem', color: '#888', margin: '0.5rem 0 0' }}>
-        Applies to newly dropped photos - already-processed ones aren't reprocessed if you change these.
+        Changing these re-processes any photos you've already added, not just new ones.
       </p>
     </fieldset>
   )

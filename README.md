@@ -22,8 +22,14 @@ libraries. Photos are never uploaded anywhere; nothing is stored server-side.
   with photos nested under `YYYY/YYYY-MM-DD/` when "Organize by date" is on
   (or `unknown/` if no date could be determined at all), flat otherwise.
 
-Three checkboxes in the UI control per-batch behavior (see
-[frontend/src/lib/types.ts](frontend/src/lib/types.ts)'s `ProcessingOptions`):
+The options panel (see [frontend/src/lib/types.ts](frontend/src/lib/types.ts)'s
+`ProcessingOptions`) controls processing, and changes apply retroactively:
+toggling "Convert HEIC," "Pad to square," or "Reduce quality" (or moving the
+quality slider) automatically re-processes any photos you've already added,
+in place - not just photos dropped afterward. "Organize by date" doesn't
+need reprocessing at all since it's just how the gallery/zip are laid out,
+recomputed live. A **Reset** button in the header clears all photos and
+options back to defaults in one click.
 
 - **Organize by date** - group the gallery/zip by date. If off, the gallery
   is a flat grid and the zip is flat too.
@@ -102,7 +108,5 @@ to provision.
   thread. If this becomes a bottleneck, the next step is moving
   `processPhoto` into a Web Worker so the UI stays responsive and photos can
   process in parallel.
-- No deduplication — that was broken in the original app too and is
-  out of scope for this pass.
 - EXIF `Orientation` isn't explicitly corrected; rotated photos may display
   sideways depending on the browser's default `createImageBitmap` behavior.

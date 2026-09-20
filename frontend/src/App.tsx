@@ -18,6 +18,14 @@ const DEFAULT_OPTIONS: ProcessingOptions = {
   qualityPercent: 75,
 }
 
+// Options that change the actual output bytes, so an already-processed photo
+// needs to be re-run through processPhoto when one of them changes.
+// sortByDate is deliberately excluded - it's applied live at render/zip time
+// (see DateGroups/buildOrganizedZip), no reprocessing needed.
+const OUTPUT_AFFECTING_KEYS = ['convertHeic', 'squarify', 'reduceQuality', 'qualityPercent'] as const
+
+const REPROCESS_DEBOUNCE_MS = 400
+
 let nextId = 0
 function makeId(): string {
   nextId += 1
@@ -30,6 +38,8 @@ export function App() {
   const [isProcessing, setIsProcessing] = useState(false)
   const [isZipping, setIsZipping] = useState(false)
   const processingToken = useRef(0)
+  const sourceFiles = useRef(new Map<string, File>())
+  const reprocessTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const handleFiles = useCallback(
     async (files: File[]) => {
@@ -37,6 +47,8 @@ export function App() {
 
       const token = ++processingToken.current
       const ids = files.map(() => makeId())
+      files.forEach((file, i) => sourceFiles.current.set(ids[i], file))
+
       const pending: ProcessedPhoto[] = files.map((file, i) => ({
         id: ids[i],
         originalFilename: file.name,
@@ -78,6 +90,40 @@ export function App() {
     [options],
   )
 
+  const reprocessAll = useCallback(async (newOptions: ProcessingOptions) => {
+    const entries = [...sourceFiles.current.entries()]
+    if (entries.length === 0) return
+
+    const token = ++processingToken.current
+    setIsProcessing(true)
+
+    for (const [id, file] of entries) {
+      if (processingToken.current !== token) return // superseded by a newer change
+      setPhotos((prev) => prev.map((p) => (p.id === id ? { ...p, status: 'processing' } : p)))
+      const result = await processPhoto(file, id, newOptions)
+      if (processingToken.current !== token) return
+      setPhotos((prev) =>
+        prev.map((p) => (p.id === result.id ? { ...result, contentHash: p.contentHash, excluded: p.excluded } : p)),
+      )
+    }
+    setIsProcessing(false)
+  }, [])
+
+  const handleOptionsChange = useCallback(
+    (newOptions: ProcessingOptions) => {
+      const affectsOutput = OUTPUT_AFFECTING_KEYS.some((key) => newOptions[key] !== options[key])
+      setOptions(newOptions)
+
+      if (affectsOutput) {
+        // Debounced so dragging the quality slider doesn't kick off a decode
+        // pass on every tick - only the value you settle on actually runs.
+        if (reprocessTimer.current) clearTimeout(reprocessTimer.current)
+        reprocessTimer.current = setTimeout(() => reprocessAll(newOptions), REPROCESS_DEBOUNCE_MS)
+      }
+    },
+    [options, reprocessAll],
+  )
+
   const toggleExcluded = useCallback((id: string) => {
     setPhotos((prev) => prev.map((p) => (p.id === id ? { ...p, excluded: !p.excluded } : p)))
   }, [])
@@ -90,7 +136,9 @@ export function App() {
   }, [])
 
   const handleReset = useCallback(() => {
+    if (reprocessTimer.current) clearTimeout(reprocessTimer.current)
     processingToken.current++ // invalidate any in-flight processing loop
+    sourceFiles.current.clear()
     setPhotos((prev) => {
       for (const p of prev) if (p.thumbnailUrl) URL.revokeObjectURL(p.thumbnailUrl)
       return []
@@ -137,7 +185,7 @@ export function App() {
 
       <main style={{ marginTop: '1.5rem' }}>
         <div style={{ marginBottom: '1.5rem' }}>
-          <OptionsPanel options={options} onChange={setOptions} />
+          <OptionsPanel options={options} onChange={handleOptionsChange} />
         </div>
 
         <UploadDropzone onFilesSelected={handleFiles} disabled={isProcessing} />
