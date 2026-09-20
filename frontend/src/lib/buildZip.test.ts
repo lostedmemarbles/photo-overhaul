@@ -74,4 +74,23 @@ describe('buildOrganizedZip', () => {
     const names = await fileEntryNames(await buildOrganizedZip(photos, false))
     expect(names).toEqual(['a.jpg'])
   })
+
+  it('carries passthrough files into other-files/ unchanged', async () => {
+    // Node has no global File; a named Blob satisfies buildOrganizedZip's use of .name.
+    const notes = Object.assign(new Blob(['hello']), { name: 'notes.txt' }) as File
+    const photos: ProcessedPhoto[] = [donePhoto({ id: '1', outputFilename: 'a.jpg' })]
+
+    const zipBlob = await buildOrganizedZip(photos, true, [notes])
+    const zip = await JSZip.loadAsync(await zipBlob.arrayBuffer())
+    expect(await zip.file('other-files/notes.txt')?.async('string')).toBe('hello')
+  })
+
+  it('dedupes colliding passthrough filenames instead of overwriting', async () => {
+    const a = Object.assign(new Blob(['first']), { name: 'notes.txt' }) as File
+    const b = Object.assign(new Blob(['second']), { name: 'notes.txt' }) as File
+
+    const zipBlob = await buildOrganizedZip([], true, [a, b])
+    const names = await fileEntryNames(zipBlob)
+    expect(names.sort()).toEqual(['other-files/notes (2).txt', 'other-files/notes.txt'])
+  })
 })

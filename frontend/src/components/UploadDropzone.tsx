@@ -1,11 +1,12 @@
 import { useRef, useState, type DragEvent } from 'react'
+import { ACCEPTED_IMAGE_EXTENSIONS } from '../lib/imageTypes'
 
 interface Props {
   onFilesSelected: (files: File[]) => void
   disabled?: boolean
 }
 
-const ACCEPTED_EXTENSIONS = ['.heic', '.heif', '.jpg', '.jpeg', '.png']
+const ACCEPTED_EXTENSIONS = [...ACCEPTED_IMAGE_EXTENSIONS, '.zip']
 
 export function UploadDropzone({ onFilesSelected, disabled }: Props) {
   const [isDragOver, setIsDragOver] = useState(false)
@@ -38,7 +39,7 @@ export function UploadDropzone({ onFilesSelected, disabled }: Props) {
     >
       <p>Drag and drop photos here, or click to choose files</p>
       <p style={{ fontSize: '0.85rem', color: '#666' }}>
-        Supports HEIC, JPG, and PNG
+        Supports HEIC, JPG, PNG, and .zip archives of photos
       </p>
       <input
         ref={inputRef}

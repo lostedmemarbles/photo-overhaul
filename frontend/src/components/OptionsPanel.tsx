@@ -25,7 +25,7 @@ const FIELDS: Field[] = [
   {
     key: 'reduceQuality',
     label: 'Reduce quality to save space',
-    hint: 'Re-compresses every photo at the quality level below to shrink file size. Always re-encodes to JPEG, even for HEIC and PNG.',
+    hint: 'Re-compresses photos at the quality level below to shrink file size. 100% leaves photos exactly as uploaded - below that only ever makes a file smaller, never bigger.',
   },
 ]
 
@@ -65,8 +65,8 @@ export function OptionsPanel({
             onChange={(e) => onChange({ ...options, qualityPercent: Number(e.target.value) })}
             style={{ width: 160 }}
           />
-          <span style={{ fontSize: '0.85rem', color: '#444', minWidth: '3.5em' }}>
-            {options.qualityPercent}%
+          <span style={{ fontSize: '0.85rem', color: '#444', minWidth: '7em' }}>
+            {options.qualityPercent}% {options.qualityPercent >= 100 && '(original)'}
           </span>
         </label>
       )}

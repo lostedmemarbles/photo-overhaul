@@ -25,13 +25,6 @@ function stripExtension(name: string): string {
   return name.replace(/\.[^./\\]+$/, '')
 }
 
-/** Squarify and quality reduction always re-encode to JPEG (they have to
- *  rasterize anyway); HEIC otherwise only becomes JPEG if conversion is on. */
-function outputFilenameFor(file: File, options: ProcessingOptions): string {
-  const willBeJpeg = options.squarify || options.reduceQuality || (options.convertHeic && isHeic(file))
-  return willBeJpeg ? `${stripExtension(file.name)}.jpg` : file.name
-}
-
 /** Reads DateTimeOriginal from the EXIF sub-IFD (falling back to CreateDate/ModifyDate). */
 async function extractExifDate(file: File): Promise<string | null> {
   try {
@@ -125,33 +118,54 @@ export async function processPhoto(
   id: string,
   options: ProcessingOptions,
 ): Promise<ProcessPhotoResult> {
-  const outputFilename = outputFilenameFor(file, options)
   try {
     const exifDate = await extractExifDate(file)
     const { date, source: dateSource } = resolveDate(exifDate, file.lastModified)
 
     const sourceIsHeic = isHeic(file)
-    // Squarify and quality reduction both need to rasterize regardless of the
-    // convert toggle, since they have to draw the image onto a canvas either way.
-    const decodedForOutput = sourceIsHeic && (options.convertHeic || options.squarify || options.reduceQuality)
+    // 100% means "whatever quality it already had" - quality reduction only
+    // ever kicks in below that, so it can only ever shrink a file, never grow one.
+    const effectiveReduceQuality = options.reduceQuality && options.qualityPercent < 100
 
-    let outputBlob: Blob = decodedForOutput
+    // Squarify and (sub-100%) quality reduction both need to rasterize HEIC
+    // regardless of the convert toggle, since they have to draw onto a canvas
+    // either way. Decoded once - also reused for the thumbnail below, even if
+    // quality reduction later falls back to the original HEIC bytes for output.
+    const needsHeicDecode = sourceIsHeic && (options.convertHeic || options.squarify || effectiveReduceQuality)
+    const decodedJpeg = needsHeicDecode
       ? await decodeHeicToJpeg(file, resolveQuality(options, DEFAULT_HEIC_QUALITY))
-      : file
+      : null
+
+    let outputBlob: Blob = decodedJpeg ?? file
+    let outputIsJpeg = decodedJpeg !== null
 
     if (options.squarify) {
       outputBlob = await squarifyImage(outputBlob, resolveQuality(options, DEFAULT_SQUARIFY_QUALITY))
-    } else if (options.reduceQuality && !sourceIsHeic) {
-      // HEIC already got recompressed at the right quality via decodeHeicToJpeg
-      // above; non-HEIC files need an explicit pass since they'd otherwise be
-      // passed through untouched.
-      outputBlob = await recompressImage(outputBlob, resolveQuality(options, DEFAULT_RECOMPRESS_QUALITY))
+      outputIsJpeg = true
+    } else if (effectiveReduceQuality) {
+      if (sourceIsHeic) {
+        // JPEG can lose to HEIC's more efficient compression for some images.
+        // If conversion wasn't independently requested via "Convert HEIC,"
+        // quality reduction should never hand back something bigger than the
+        // upload - fall back to the untouched original in that case.
+        if (!options.convertHeic && outputBlob.size >= file.size) {
+          outputBlob = file
+          outputIsJpeg = false
+        }
+      } else {
+        const candidate = await recompressImage(outputBlob, resolveQuality(options, DEFAULT_RECOMPRESS_QUALITY))
+        if (candidate.size < outputBlob.size) {
+          outputBlob = candidate
+          outputIsJpeg = true
+        }
+      }
     }
 
+    const outputFilename = outputIsJpeg ? `${stripExtension(file.name)}.jpg` : file.name
+
     // Thumbnails need a browser-renderable blob even when the export stays
-    // untouched HEIC (convertHeic and squarify both off) - decode a
-    // throwaway copy just for the preview in that case.
-    const previewBlob = sourceIsHeic && !decodedForOutput ? await decodeHeicToJpeg(file, 0.7) : outputBlob
+    // untouched HEIC - reuse the decode above if we already have it.
+    const previewBlob = sourceIsHeic ? (decodedJpeg ?? (await decodeHeicToJpeg(file, 0.7))) : outputBlob
     const thumbnailUrl = await makeThumbnail(previewBlob)
 
     return {
@@ -170,7 +184,7 @@ export async function processPhoto(
     return {
       id,
       originalFilename: file.name,
-      outputFilename,
+      outputFilename: file.name,
       exifDate: null,
       dateSource: null,
       status: 'failed',

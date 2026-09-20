@@ -4,8 +4,9 @@ import { DuplicatesPanel } from './components/DuplicatesPanel'
 import { OptionsPanel } from './components/OptionsPanel'
 import { PhotoGrid } from './components/PhotoGrid'
 import { UploadDropzone } from './components/UploadDropzone'
-import { buildOrganizedZip } from './lib/buildZip'
+import { buildOrganizedZip, PASSTHROUGH_FOLDER } from './lib/buildZip'
 import { findDuplicateGroups, idsToAutoExclude } from './lib/duplicates'
+import { expandZipFiles } from './lib/expandZips'
 import { compareSizes, formatSizeComparison } from './lib/formatSize'
 import { sha256Hex } from './lib/hash'
 import { processPhoto } from './lib/processPhoto'
@@ -36,6 +37,7 @@ function makeId(): string {
 export function App() {
   const [options, setOptions] = useState<ProcessingOptions>(DEFAULT_OPTIONS)
   const [photos, setPhotos] = useState<ProcessedPhoto[]>([])
+  const [passthroughFiles, setPassthroughFiles] = useState<File[]>([])
   const [isProcessing, setIsProcessing] = useState(false)
   const [isZipping, setIsZipping] = useState(false)
   const processingToken = useRef(0)
@@ -43,10 +45,22 @@ export function App() {
   const reprocessTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const handleFiles = useCallback(
-    async (files: File[]) => {
-      if (files.length === 0) return
+    async (rawFiles: File[]) => {
+      if (rawFiles.length === 0) return
 
       const token = ++processingToken.current
+      setIsProcessing(true) // covers zip extraction too, which can take a moment for large archives
+
+      const { images: files, passthrough } = await expandZipFiles(rawFiles)
+      if (processingToken.current !== token) return
+      if (passthrough.length > 0) {
+        setPassthroughFiles((prev) => [...prev, ...passthrough])
+      }
+      if (files.length === 0) {
+        setIsProcessing(false)
+        return
+      }
+
       const ids = files.map(() => makeId())
       files.forEach((file, i) => sourceFiles.current.set(ids[i], file))
 
@@ -65,7 +79,6 @@ export function App() {
         originalSize: file.size,
       }))
       setPhotos((prev) => [...prev, ...pending])
-      setIsProcessing(true)
 
       // Hash immediately (cheap) so duplicate badges show up before the
       // slower per-photo processing (HEIC decode etc.) even finishes.
@@ -150,6 +163,7 @@ export function App() {
       for (const p of prev) if (p.thumbnailUrl) URL.revokeObjectURL(p.thumbnailUrl)
       return []
     })
+    setPassthroughFiles([])
     setOptions(DEFAULT_OPTIONS)
     setIsProcessing(false)
     setIsZipping(false)
@@ -158,7 +172,7 @@ export function App() {
   const handleDownload = useCallback(async () => {
     setIsZipping(true)
     try {
-      const zipBlob = await buildOrganizedZip(photos, options.sortByDate)
+      const zipBlob = await buildOrganizedZip(photos, options.sortByDate, passthroughFiles)
       const url = URL.createObjectURL(zipBlob)
       const a = document.createElement('a')
       a.href = url
@@ -168,9 +182,10 @@ export function App() {
     } finally {
       setIsZipping(false)
     }
-  }, [photos, options.sortByDate])
+  }, [photos, options.sortByDate, passthroughFiles])
 
-  const canReset = photos.length > 0 || JSON.stringify(options) !== JSON.stringify(DEFAULT_OPTIONS)
+  const canReset =
+    photos.length > 0 || passthroughFiles.length > 0 || JSON.stringify(options) !== JSON.stringify(DEFAULT_OPTIONS)
   const duplicateGroups = useMemo(() => findDuplicateGroups(photos), [photos])
   const doneCount = photos.filter((p) => p.status === 'done').length
   const failedCount = photos.filter((p) => p.status === 'failed').length
@@ -211,7 +226,7 @@ export function App() {
 
         <UploadDropzone onFilesSelected={handleFiles} disabled={isProcessing} />
 
-        {photos.length > 0 && (
+        {(photos.length > 0 || passthroughFiles.length > 0) && (
           <div style={{ marginTop: '1.5rem' }}>
             <DuplicatesPanel
               groups={duplicateGroups}
@@ -219,13 +234,24 @@ export function App() {
               onAutoRemove={autoRemoveDuplicates}
             />
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1rem' }}>
-              <p style={{ margin: 0 }}>
-                {doneCount}/{photos.length} processed
-                {failedCount > 0 && <span style={{ color: 'crimson' }}> ({failedCount} failed)</span>}
-                {includedCount !== doneCount && <span> · {includedCount} will be included in the zip</span>}
-              </p>
-              <button onClick={handleDownload} disabled={includedCount === 0 || isZipping}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
+              {photos.length > 0 && (
+                <p style={{ margin: 0 }}>
+                  {doneCount}/{photos.length} processed
+                  {failedCount > 0 && <span style={{ color: 'crimson' }}> ({failedCount} failed)</span>}
+                  {includedCount !== doneCount && <span> · {includedCount} will be included in the zip</span>}
+                </p>
+              )}
+              {passthroughFiles.length > 0 && (
+                <p style={{ margin: 0, color: '#666' }}>
+                  + {passthroughFiles.length} other file{passthroughFiles.length === 1 ? '' : 's'} (not
+                  photos) will be included as-is in {PASSTHROUGH_FOLDER}/
+                </p>
+              )}
+              <button
+                onClick={handleDownload}
+                disabled={(includedCount === 0 && passthroughFiles.length === 0) || isZipping}
+              >
                 {isZipping ? 'Building zip…' : 'Download organized zip'}
               </button>
             </div>
@@ -234,7 +260,8 @@ export function App() {
                 Total size: {formatSizeComparison(sizeComparison)}
               </p>
             )}
-            {options.sortByDate ? <DateGroups photos={photos} /> : <PhotoGrid photos={photos} />}
+            {photos.length > 0 &&
+              (options.sortByDate ? <DateGroups photos={photos} /> : <PhotoGrid photos={photos} />)}
           </div>
         )}
       </main>

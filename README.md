@@ -1,9 +1,10 @@
 # Photo Organizer
 
 A browser-only web app for organizing photos (including HEIC) by capture
-date. Upload a batch and choose what to do with them via checkboxes:
-organize by date, convert HEIC to JPEG, and/or pad to a 1:1 square - then
-download a zip with the results.
+date. Upload a batch of photos - or a .zip archive of them - and choose what
+to do via checkboxes: organize by date, convert HEIC to JPEG, pad to a 1:1
+square, and/or reduce quality to save space - then download a zip with the
+results.
 
 **No backend.** Everything — HEIC decoding, EXIF parsing, thumbnailing, and
 zip creation — runs client-side in the browser via WebAssembly and JS
@@ -20,7 +21,17 @@ libraries. Photos are never uploaded anywhere; nothing is stored server-side.
   the photo's EXIF data (falling back to `CreateDate`/`ModifyDate`).
 - [jszip](https://www.npmjs.com/package/jszip) builds the downloadable zip,
   with photos nested under `YYYY/YYYY-MM-DD/` when "Organize by date" is on
-  (or `unknown/` if no date could be determined at all), flat otherwise.
+  (or `unknown/` if no date could be determined at all), flat otherwise. It's
+  also used to *read* an uploaded .zip: dropping one in extracts every image
+  inside (at any nesting depth) and feeds them through the same pipeline as
+  individually-dropped files. macOS junk (`__MACOSX/`, dotfiles) is skipped -
+  but nothing else is silently dropped. Any non-image file, whether loose or
+  found inside a zip (including a zip that fails to parse), rides along
+  unchanged into `other-files/` in the download instead of being discarded,
+  so you never have to go back and manually recover something from the
+  original zip/folder. See
+  [frontend/src/lib/expandZips.ts](frontend/src/lib/expandZips.ts) and
+  [frontend/src/lib/buildZip.ts](frontend/src/lib/buildZip.ts).
 
 The options panel (see [frontend/src/lib/types.ts](frontend/src/lib/types.ts)'s
 `ProcessingOptions`) controls processing, and changes apply retroactively:
@@ -37,12 +48,22 @@ options back to defaults in one click.
 - **Pad to square (1:1)** - adds black borders to make every photo square.
   This always re-encodes to JPEG, even for HEIC with conversion off, since
   padding requires rasterizing the image onto a canvas either way.
-- **Reduce quality to save space** - reveals a 10-100% quality slider and
-  re-compresses every photo at that level, including ones that would
-  otherwise pass through untouched (plain JPEG/PNG). Like squarify, this
-  always re-encodes to JPEG. Tested against a real 964KB photo: 20% quality
-  produced a 217KB file, 95% quality produced ~1.18MB - both valid, correctly
-  sized JPEGs.
+- **Reduce quality to save space** - reveals a 10-100% quality slider. It can
+  only ever shrink a file, never grow one:
+  - **100%** is treated as "exactly what was uploaded" - the photo isn't
+    touched at all, not even decoded, so the output is byte-identical to the
+    original (verified: same SHA-256 hash in, hash out).
+  - **Below 100%** on a plain JPEG/PNG, it re-compresses and keeps the result
+    only if it's actually smaller; otherwise the original is kept untouched.
+  - **On HEIC with "Convert HEIC" off**, quality reduction alone can still
+    force a JPEG conversion (there's no way to write a smaller HEIC in-browser)
+    - but JPEG sometimes loses to HEIC's more efficient compression on small
+    images, so if the converted result would be bigger than the original
+    HEIC, the original HEIC bytes are kept instead. This guarantee doesn't
+    extend to an explicitly-checked "Convert HEIC," which always produces a
+    JPEG regardless of size, since that's a separate, deliberate request.
+  - Squarify is exempt from all of this - padding is an intentional size
+    change, not a quality-reduction side effect.
 
 When "Convert HEIC to JPEG" or "Reduce quality to save space" is on, a
 **total size comparison** appears above the gallery - see
