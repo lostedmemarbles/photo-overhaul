@@ -31,6 +31,18 @@ Three checkboxes in the UI control per-batch behavior (see
 - **Pad to square (1:1)** - adds black borders to make every photo square.
   This always re-encodes to JPEG, even for HEIC with conversion off, since
   padding requires rasterizing the image onto a canvas either way.
+- **Reduce quality to save space** - reveals a 10-100% quality slider and
+  re-compresses every photo at that level, including ones that would
+  otherwise pass through untouched (plain JPEG/PNG). Like squarify, this
+  always re-encodes to JPEG. Tested against a real 964KB photo: 20% quality
+  produced a 217KB file, 95% quality produced ~1.18MB - both valid, correctly
+  sized JPEGs.
+
+Video compression was considered but is out of scope for now - doing it
+fully client-side would need ffmpeg.wasm (a ~25-30MB download and
+CPU-bound transcoding) or the WebCodecs API (faster but inconsistent
+browser support), either of which is a much bigger lift than the image
+pipeline above.
 
 If no EXIF date is found, the app falls back to the file's last-modified
 date and marks the photo with a "file date" badge in the gallery, since that

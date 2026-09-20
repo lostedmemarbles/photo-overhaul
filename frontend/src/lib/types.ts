@@ -11,6 +11,8 @@ export interface ProcessingOptions {
   sortByDate: boolean
   convertHeic: boolean
   squarify: boolean
+  reduceQuality: boolean
+  qualityPercent: number // 1-100 JPEG compression level; only used when reduceQuality is true
 }
 
 export interface ProcessedPhoto {

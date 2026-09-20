@@ -1,7 +1,7 @@
 import type { ProcessingOptions } from '../lib/types'
 
 interface Field {
-  key: keyof ProcessingOptions
+  key: keyof Pick<ProcessingOptions, 'sortByDate' | 'convertHeic' | 'squarify' | 'reduceQuality'>
   label: string
   hint: string
 }
@@ -21,6 +21,11 @@ const FIELDS: Field[] = [
     key: 'squarify',
     label: 'Pad to square (1:1)',
     hint: 'Adds black borders so every photo becomes a square. Always re-encodes to JPEG, even for HEIC photos, since padding requires redrawing the image.',
+  },
+  {
+    key: 'reduceQuality',
+    label: 'Reduce quality to save space',
+    hint: 'Re-compresses every photo at the quality level below to shrink file size. Always re-encodes to JPEG, even for HEIC and PNG.',
   },
 ]
 
@@ -48,6 +53,24 @@ export function OptionsPanel({
           {label}
         </label>
       ))}
+
+      {options.reduceQuality && (
+        <label style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginLeft: '1.6rem', marginBottom: '0.35rem' }}>
+          <input
+            type="range"
+            min={10}
+            max={100}
+            step={5}
+            value={options.qualityPercent}
+            onChange={(e) => onChange({ ...options, qualityPercent: Number(e.target.value) })}
+            style={{ width: 160 }}
+          />
+          <span style={{ fontSize: '0.85rem', color: '#444', minWidth: '3.5em' }}>
+            {options.qualityPercent}%
+          </span>
+        </label>
+      )}
+
       <p style={{ fontSize: '0.75rem', color: '#888', margin: '0.5rem 0 0' }}>
         Applies to newly dropped photos - already-processed ones aren't reprocessed if you change these.
       </p>

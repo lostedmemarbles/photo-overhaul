@@ -14,6 +14,8 @@ const DEFAULT_OPTIONS: ProcessingOptions = {
   sortByDate: true,
   convertHeic: true,
   squarify: false,
+  reduceQuality: false,
+  qualityPercent: 75,
 }
 
 let nextId = 0
