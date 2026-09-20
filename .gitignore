@@ -1,0 +1,11 @@
+# Node / frontend
+frontend/node_modules/
+frontend/dist/
+
+# Legacy Python
+__pycache__/
+*.pyc
+
+# OS
+.DS_Store
+Thumbs.db

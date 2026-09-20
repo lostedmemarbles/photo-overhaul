@@ -15,12 +15,12 @@ from pillow_heif import register_heif_opener
 from tkinter import *
 from tkinter import ttk
 from tkinter.filedialog import askdirectory
-from widgetWrapper import WidgetWrapper, CreateMessageBox
+from widgetWrapper import WidgetWrapper, createMessageBox, openProcessPhotoWindow
 
 register_heif_opener()
 
 rootWindow = None
-secondWindow = None
+processWindow = None
 directory = 'C:\\Users\\DareA\\Downloads\\PhotoOverhaul\\Photos'
 saveDir = 'C:\\Users\\DareA\\Downloads\\PhotoOverhaul\\FinalPhotos\\{}'
 dateSorted = 'C:\\Users\\DareA\\Downloads\\PhotoOverhaul\\SortedByDate\\{}'
@@ -64,13 +64,13 @@ def openPhotoOrganizerGUI():
     
     recursionTrueRadio = WidgetWrapper('radio', recursionFrame, widgetText='Yes', variable=isRecursive).insertIntoGrid(0,0,pady=0)
     
-    recursionFalseRadio = WidgetWrapper('radio', recursionFrame, widgetText='No', variable=isRecursive).insertIntoGrid(1,0,pady=0)
+    recursionFalseRadio = WidgetWrapper('radio', recursionFrame, widgetText='No', value=True).insertIntoGrid(1,0,pady=0)
     
     rightFileExplorerFrame = WidgetWrapper('frame',layoutFrame,style='gray.TFrame').insertIntoGrid(1, 0)#.resizeWidget(.5,.5,frac=True)
     rightFileExplorerFrame.widget.columnconfigure(0, weight=1)
     
     metadataButton = WidgetWrapper('button',leftOptionsFrame, widgetText='Show Metadata', widgetCommand=showMetaData).insertIntoGrid(0, 3)
-    processButton = WidgetWrapper('button',leftOptionsFrame, widgetText='Process Photos', widgetCommand=openProcessPhotoWindow).insertIntoGrid(0, 4)
+    processButton = WidgetWrapper('button',leftOptionsFrame, widgetText='Process Photos', widgetCommand=lambda: openProcessPhotoWindow(rootWindow)).insertIntoGrid(0, 4)
     quitButton = WidgetWrapper('button',leftOptionsFrame, widgetText='Quit', widgetCommand=rootWindow.widget.destroy).insertIntoGrid(0, 5)
     
     textBox = WidgetWrapper('label', rightFileExplorerFrame, widgetText='BLEH').insertIntoGrid(0,0)#.resizeWidget(100,50)
@@ -103,26 +103,7 @@ def showMetaData():
     
     if mess == '':
         mess = 'No metadata'
-    CreateMessageBox('Metadata', mess)
-def openProcessPhotoWindow():
-    global filePathsToWorkWith, listBox, secondWindow, rootWindow
-    mess = 'Select your options:'
-    #messagebox.showinfo('Process Photos', mess)
-    secondWindow = Toplevel(rootWindow.widget)
-    secondWindow.title('Options')
-    secondWindow.geometry('100x100')
-    secondWindow.bind('<Escape>', secondWindowClosed)
-    secondWindow.protocol('WM_DELETE_WINDOW', secondWindowClosed)
-    secondWindow.grab_set()
-    secondWindow.focus()
-    #rootWindow.lock()
-    
-def secondWindowClosed(this=None):
-    global secondWindow, rootWindow
-    print('BLEH CLOSED')
-    secondWindow.destroy()
-    secondWindow.grab_release()
-    #rootWindow.unlock()
+    createMessageBox('Metadata', mess)
     
 def deleteAllFromListBox():
     global listBox

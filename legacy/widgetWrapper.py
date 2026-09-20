@@ -3,7 +3,7 @@ from tkinter import Tk
 from tkinter import *
 import sys
 class WidgetWrapper:
-    def __init__(this, widgetType, parent=None, widgetTitle='', widgetText='', widgetCommand=None, style=None, variable=None):
+    def __init__(this, widgetType, parent=None, widgetTitle='', widgetText='', widgetCommand=None, style=None, variable=None, value=False):
         this.parent = parent
         this.pady = 0
         this.padx = 0
@@ -45,7 +45,7 @@ class WidgetWrapper:
             if not parent:
                 print('NEEDS PARENT WIDGET')
                 sys.exit(-1)
-            this.widget = Radiobutton(parent.widget, text=widgetText, variable=variable, value=False)
+            this.widget = Radiobutton(parent.widget, text=widgetText, variable=variable, value=value)
         elif widgetType == 'booleanvar':
             if not parent:
                 print('NEEDS PARENT WIDGET')
@@ -105,5 +105,26 @@ class WidgetWrapper:
         this.widget.deiconify()
         return this
 
-def CreateMessageBox(title, mess):
+def createMessageBox(title, mess):
     messagebox.showinfo(title, mess)
+
+def openProcessPhotoWindow(rootWindow):
+    global processWindow
+    mess = 'Select your options:'
+    #messagebox.showinfo('Process Photos', mess)
+    processWindow = Toplevel(rootWindow.widget)
+    processWindow.title('Options')
+    processWindow.geometry('100x100')
+    processWindow.bind('<Escape>', processWindowClosed)
+    processWindow.protocol('WM_DELETE_WINDOW', processWindowClosed)
+    processWindow.grab_set()
+    processWindow.focus()
+    #rootWindow.lock()
+    
+def processWindowClosed(this=None):
+    global processWindow
+    print('BLEH CLOSED')
+    processWindow.destroy()
+    processWindow.grab_release()
+    #rootWindow.unlock()
+    
