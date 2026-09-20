@@ -16,6 +16,7 @@ function donePhoto(overrides: Partial<ProcessedPhoto>): ProcessedPhoto {
     outputBlob: new Blob(['bytes']),
     contentHash: null,
     excluded: false,
+    originalSize: 1000,
     ...overrides,
   }
 }

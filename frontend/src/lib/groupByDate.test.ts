@@ -15,6 +15,7 @@ function photo(overrides: Partial<ProcessedPhoto>): ProcessedPhoto {
     outputBlob: null,
     contentHash: null,
     excluded: false,
+    originalSize: 1000,
     ...overrides,
   }
 }

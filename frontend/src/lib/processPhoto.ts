@@ -164,6 +164,7 @@ export async function processPhoto(
       error: null,
       thumbnailUrl,
       outputBlob,
+      originalSize: file.size,
     }
   } catch (err) {
     return {
@@ -176,6 +177,7 @@ export async function processPhoto(
       error: err instanceof Error ? err.message : 'Processing failed',
       thumbnailUrl: null,
       outputBlob: null,
+      originalSize: file.size,
     }
   }
 }

@@ -44,6 +44,15 @@ options back to defaults in one click.
   produced a 217KB file, 95% quality produced ~1.18MB - both valid, correctly
   sized JPEGs.
 
+When "Convert HEIC to JPEG" or "Reduce quality to save space" is on, a
+**total size comparison** appears above the gallery - see
+[frontend/src/lib/formatSize.ts](frontend/src/lib/formatSize.ts). The two
+sides aren't computed the same way on purpose: "before" is a fixed baseline
+of everything you uploaded (including duplicates, even ones you've excluded),
+while "after" is live and only counts what's currently checked - so
+unchecking a duplicate copy shrinks "after" without moving "before," showing
+savings from compression and from deduping as two separate, visible effects.
+
 Video compression was considered but is out of scope for now - doing it
 fully client-side would need ffmpeg.wasm (a ~25-30MB download and
 CPU-bound transcoding) or the WebCodecs API (faster but inconsistent

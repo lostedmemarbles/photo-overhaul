@@ -6,6 +6,7 @@ import { PhotoGrid } from './components/PhotoGrid'
 import { UploadDropzone } from './components/UploadDropzone'
 import { buildOrganizedZip } from './lib/buildZip'
 import { findDuplicateGroups, idsToAutoExclude } from './lib/duplicates'
+import { compareSizes, formatSizeComparison } from './lib/formatSize'
 import { sha256Hex } from './lib/hash'
 import { processPhoto } from './lib/processPhoto'
 import type { ProcessedPhoto, ProcessingOptions } from './lib/types'
@@ -61,6 +62,7 @@ export function App() {
         outputBlob: null,
         contentHash: null,
         excluded: false,
+        originalSize: file.size,
       }))
       setPhotos((prev) => [...prev, ...pending])
       setIsProcessing(true)
@@ -114,7 +116,12 @@ export function App() {
       const affectsOutput = OUTPUT_AFFECTING_KEYS.some((key) => newOptions[key] !== options[key])
       setOptions(newOptions)
 
-      if (affectsOutput) {
+      // Only schedule a reprocess if there's already something to reprocess -
+      // otherwise a setting changed just before the first upload can fire its
+      // debounced reprocess AFTER that upload lands, redundantly re-running
+      // (and visibly flickering) photos that were already processed correctly
+      // with the current settings the first time.
+      if (affectsOutput && sourceFiles.current.size > 0) {
         // Debounced so dragging the quality slider doesn't kick off a decode
         // pass on every tick - only the value you settle on actually runs.
         if (reprocessTimer.current) clearTimeout(reprocessTimer.current)
@@ -167,7 +174,21 @@ export function App() {
   const duplicateGroups = useMemo(() => findDuplicateGroups(photos), [photos])
   const doneCount = photos.filter((p) => p.status === 'done').length
   const failedCount = photos.filter((p) => p.status === 'failed').length
-  const includedCount = photos.filter((p) => p.status === 'done' && !p.excluded).length
+  const donePhotos = photos.filter((p) => p.status === 'done')
+  const includedPhotos = donePhotos.filter((p) => !p.excluded)
+  const includedCount = includedPhotos.length
+
+  // "Before" is a fixed baseline: every photo that was actually uploaded and
+  // processed, regardless of duplicate exclusion. "After" is live and tracks
+  // your current selection, so unchecking a duplicate shrinks only that side -
+  // together they show both savings from compression AND from deduping.
+  const showSizeComparison = (options.convertHeic || options.reduceQuality) && donePhotos.length > 0
+  const sizeComparison = showSizeComparison
+    ? compareSizes(
+        donePhotos.reduce((sum, p) => sum + (p.originalSize || 0), 0),
+        includedPhotos.reduce((sum, p) => sum + (p.outputBlob?.size ?? p.originalSize ?? 0), 0),
+      )
+    : null
 
   return (
     <div style={{ maxWidth: 960, margin: '0 auto', padding: '1.5rem' }}>
@@ -208,6 +229,11 @@ export function App() {
                 {isZipping ? 'Building zip…' : 'Download organized zip'}
               </button>
             </div>
+            {sizeComparison && (
+              <p style={{ margin: '0 0 1rem', fontSize: '0.9rem', color: '#444' }}>
+                Total size: {formatSizeComparison(sizeComparison)}
+              </p>
+            )}
             {options.sortByDate ? <DateGroups photos={photos} /> : <PhotoGrid photos={photos} />}
           </div>
         )}

@@ -27,4 +27,5 @@ export interface ProcessedPhoto {
   outputBlob: Blob | null
   contentHash: string | null // SHA-256 of the original file's raw bytes, for exact-duplicate detection
   excluded: boolean // true if the user (or auto-dedupe) chose to leave this out of the download
+  originalSize: number // bytes of the original uploaded file, for the before/after size comparison
 }
