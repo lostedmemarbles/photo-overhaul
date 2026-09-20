@@ -89,6 +89,17 @@ export function App() {
     })
   }, [])
 
+  const handleReset = useCallback(() => {
+    processingToken.current++ // invalidate any in-flight processing loop
+    setPhotos((prev) => {
+      for (const p of prev) if (p.thumbnailUrl) URL.revokeObjectURL(p.thumbnailUrl)
+      return []
+    })
+    setOptions(DEFAULT_OPTIONS)
+    setIsProcessing(false)
+    setIsZipping(false)
+  }, [])
+
   const handleDownload = useCallback(async () => {
     setIsZipping(true)
     try {
@@ -104,6 +115,7 @@ export function App() {
     }
   }, [photos, options.sortByDate])
 
+  const canReset = photos.length > 0 || JSON.stringify(options) !== JSON.stringify(DEFAULT_OPTIONS)
   const duplicateGroups = useMemo(() => findDuplicateGroups(photos), [photos])
   const doneCount = photos.filter((p) => p.status === 'done').length
   const failedCount = photos.filter((p) => p.status === 'failed').length
@@ -111,11 +123,16 @@ export function App() {
 
   return (
     <div style={{ maxWidth: 960, margin: '0 auto', padding: '1.5rem' }}>
-      <header>
-        <h1 style={{ marginBottom: 0 }}>Photo Organizer</h1>
-        <p style={{ color: '#666', marginTop: '0.25rem' }}>
-          Everything happens in your browser — photos are never uploaded anywhere.
-        </p>
+      <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '1rem' }}>
+        <div>
+          <h1 style={{ marginBottom: 0 }}>Photo Organizer</h1>
+          <p style={{ color: '#666', marginTop: '0.25rem' }}>
+            Everything happens in your browser! Photos are never uploaded anywhere.
+          </p>
+        </div>
+        <button onClick={handleReset} disabled={!canReset} title="Remove all photos and reset options to their defaults">
+          Reset
+        </button>
       </header>
 
       <main style={{ marginTop: '1.5rem' }}>
