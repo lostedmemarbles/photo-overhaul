@@ -7,12 +7,19 @@ export type PhotoStatus = 'pending' | 'processing' | 'done' | 'failed'
 // actually taken. Surfaced in the UI so it doesn't read as an exact date.
 export type DateSource = 'exif' | 'file-modified'
 
+// Folder depth when sortByDate is on: 'year' -> YYYY/, 'month' -> YYYY/YYYY-MM/,
+// 'day' -> YYYY/YYYY-MM/YYYY-MM-DD/.
+export type DateGranularity = 'year' | 'month' | 'day'
+
 export interface ProcessingOptions {
   sortByDate: boolean
+  dateGranularity: DateGranularity // only used when sortByDate is true
   convertHeic: boolean
   squarify: boolean
   reduceQuality: boolean
   qualityPercent: number // 1-100 JPEG compression level; only used when reduceQuality is true
+  checkDuplicates: boolean
+  autoRemoveDuplicates: boolean // only used when checkDuplicates is true - excludes all but one copy of each duplicate found, without manual review
 }
 
 export interface ProcessedPhoto {
@@ -28,4 +35,5 @@ export interface ProcessedPhoto {
   contentHash: string | null // SHA-256 of the original file's raw bytes, for exact-duplicate detection
   excluded: boolean // true if the user (or auto-dedupe) chose to leave this out of the download
   originalSize: number // bytes of the original uploaded file, for the before/after size comparison
+  converted: boolean // true if processing actually replaced the original bytes (HEIC decode, squarify, or a smaller recompress) - false means outputBlob is the untouched original
 }
