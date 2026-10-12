@@ -17,6 +17,7 @@ function donePhoto(overrides: Partial<ProcessedPhoto>): ProcessedPhoto {
     contentHash: null,
     excluded: false,
     originalSize: 1000,
+    converted: false,
     ...overrides,
   }
 }
@@ -26,15 +27,42 @@ async function fileEntryNames(zipBlob: Blob): Promise<string[]> {
   return Object.values(zip.files).filter((f) => !f.dir).map((f) => f.name)
 }
 
+/** A Blob-like whose arrayBuffer() always rejects, simulating a Blob whose
+ *  backing data the browser has evicted/discarded before it's read. */
+function unreadableFile(name: string): File {
+  return Object.assign(new Blob(['ignored']), {
+    name,
+    arrayBuffer: () => Promise.reject(new Error('The requested file could not be read')),
+  }) as unknown as File
+}
+
 describe('archivePathFor', () => {
-  it('groups by year/date when sorting by date and exifDate is present', () => {
+  it('nests by year/month/day by default (granularity defaults to day)', () => {
     expect(archivePathFor({ exifDate: '2023-07-04', outputFilename: 'img.jpg' }, true)).toBe(
-      '2023/2023-07-04/img.jpg',
+      '2023/2023-07/2023-07-04/img.jpg',
     )
   })
 
-  it('falls back to unknown/ when sorting by date but exifDate is missing', () => {
-    expect(archivePathFor({ exifDate: null, outputFilename: 'img.jpg' }, true)).toBe('unknown/img.jpg')
+  it('nests by year only when granularity is "year"', () => {
+    expect(archivePathFor({ exifDate: '2023-07-04', outputFilename: 'img.jpg' }, true, 'year')).toBe(
+      '2023/img.jpg',
+    )
+  })
+
+  it('nests by year/month when granularity is "month"', () => {
+    expect(archivePathFor({ exifDate: '2023-07-04', outputFilename: 'img.jpg' }, true, 'month')).toBe(
+      '2023/2023-07/img.jpg',
+    )
+  })
+
+  it('nests by year/month/day when granularity is "day"', () => {
+    expect(archivePathFor({ exifDate: '2023-07-04', outputFilename: 'img.jpg' }, true, 'day')).toBe(
+      '2023/2023-07/2023-07-04/img.jpg',
+    )
+  })
+
+  it('falls back to unknown/ when sorting by date but exifDate is missing, regardless of granularity', () => {
+    expect(archivePathFor({ exifDate: null, outputFilename: 'img.jpg' }, true, 'year')).toBe('unknown/img.jpg')
   })
 
   it('is flat at the zip root when not sorting by date, regardless of exifDate', () => {
@@ -51,8 +79,17 @@ describe('buildOrganizedZip', () => {
       donePhoto({ id: '4', status: 'pending', outputBlob: null, outputFilename: 'd.jpg' }),
     ]
 
-    const names = await fileEntryNames(await buildOrganizedZip(photos, true))
-    expect(names.sort()).toEqual(['2023/2023-07-04/a.jpg', 'unknown/b.jpg'])
+    const { blob } = await buildOrganizedZip(photos, true)
+    const names = await fileEntryNames(blob)
+    expect(names.sort()).toEqual(['2023/2023-07/2023-07-04/a.jpg', 'unknown/b.jpg'])
+  })
+
+  it('respects the dateGranularity argument for folder depth', async () => {
+    const photos: ProcessedPhoto[] = [donePhoto({ id: '1', exifDate: '2023-07-04', outputFilename: 'a.jpg' })]
+
+    const { blob } = await buildOrganizedZip(photos, true, [], [], 'year')
+    const names = await fileEntryNames(blob)
+    expect(names).toEqual(['2023/a.jpg'])
   })
 
   it('is flat at the zip root when sortByDate is false', async () => {
@@ -61,7 +98,8 @@ describe('buildOrganizedZip', () => {
       donePhoto({ id: '2', exifDate: null, outputFilename: 'b.jpg' }),
     ]
 
-    const names = await fileEntryNames(await buildOrganizedZip(photos, false))
+    const { blob } = await buildOrganizedZip(photos, false)
+    const names = await fileEntryNames(blob)
     expect(names.sort()).toEqual(['a.jpg', 'b.jpg'])
   })
 
@@ -71,7 +109,8 @@ describe('buildOrganizedZip', () => {
       donePhoto({ id: '2', outputFilename: 'a-copy.jpg', excluded: true }),
     ]
 
-    const names = await fileEntryNames(await buildOrganizedZip(photos, false))
+    const { blob } = await buildOrganizedZip(photos, false)
+    const names = await fileEntryNames(blob)
     expect(names).toEqual(['a.jpg'])
   })
 
@@ -80,8 +119,8 @@ describe('buildOrganizedZip', () => {
     const notes = Object.assign(new Blob(['hello']), { name: 'notes.txt' }) as File
     const photos: ProcessedPhoto[] = [donePhoto({ id: '1', outputFilename: 'a.jpg' })]
 
-    const zipBlob = await buildOrganizedZip(photos, true, [notes])
-    const zip = await JSZip.loadAsync(await zipBlob.arrayBuffer())
+    const { blob } = await buildOrganizedZip(photos, true, [notes])
+    const zip = await JSZip.loadAsync(await blob.arrayBuffer())
     expect(await zip.file('other-files/notes.txt')?.async('string')).toBe('hello')
   })
 
@@ -89,8 +128,29 @@ describe('buildOrganizedZip', () => {
     const a = Object.assign(new Blob(['first']), { name: 'notes.txt' }) as File
     const b = Object.assign(new Blob(['second']), { name: 'notes.txt' }) as File
 
-    const zipBlob = await buildOrganizedZip([], true, [a, b])
-    const names = await fileEntryNames(zipBlob)
+    const { blob } = await buildOrganizedZip([], true, [a, b])
+    const names = await fileEntryNames(blob)
     expect(names.sort()).toEqual(['other-files/notes (2).txt', 'other-files/notes.txt'])
+  })
+
+  it('carries the original bytes of failed photos into failed-to-process/ instead of dropping them', async () => {
+    const corrupt = Object.assign(new Blob(['broken heic bytes']), { name: 'IMG_1234.HEIC' }) as File
+    const photos: ProcessedPhoto[] = [donePhoto({ id: '1', outputFilename: 'a.jpg' })]
+
+    const { blob } = await buildOrganizedZip(photos, true, [], [corrupt])
+    const zip = await JSZip.loadAsync(await blob.arrayBuffer())
+    expect(await zip.file('failed-to-process/IMG_1234.HEIC')?.async('string')).toBe('broken heic bytes')
+  })
+
+  it('leaves out a file whose Blob throws on read instead of aborting the whole zip', async () => {
+    const good = Object.assign(new Blob(['hello']), { name: 'notes.txt' }) as File
+    const bad = unreadableFile('evicted.txt')
+    const photos: ProcessedPhoto[] = [donePhoto({ id: '1', outputFilename: 'a.jpg' })]
+
+    const { blob, skipped } = await buildOrganizedZip(photos, true, [good, bad])
+    const names = await fileEntryNames(blob)
+
+    expect(names.sort()).toEqual(['other-files/notes.txt', 'unknown/a.jpg'])
+    expect(skipped).toEqual(['other-files/evicted.txt'])
   })
 })

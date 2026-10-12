@@ -23,16 +23,25 @@ describe('expandZipFiles', () => {
 
   it('sorts a loose image file into images', async () => {
     const image = fakeFile('a.jpg', 'image/jpeg')
-    expect(await expandZipFiles([image])).toEqual({ images: [image], passthrough: [] })
+    expect(await expandZipFiles([image])).toEqual({ images: [image], passthrough: [], failedZips: [] })
   })
 
   it('sorts a loose non-photo file into passthrough', async () => {
     const doc = fakeFile('notes.txt', 'text/plain')
-    expect(await expandZipFiles([doc])).toEqual({ images: [], passthrough: [doc] })
+    expect(await expandZipFiles([doc])).toEqual({ images: [], passthrough: [doc], failedZips: [] })
   })
 
-  it('treats a corrupt/unparsable zip as a passthrough file instead of throwing', async () => {
+  it('treats a corrupt/unparsable zip as a passthrough file instead of throwing (its bytes read fine, just aren\'t a valid zip)', async () => {
     const brokenZip = fakeFile('broken.zip', 'application/zip')
-    expect(await expandZipFiles([brokenZip])).toEqual({ images: [], passthrough: [brokenZip] })
+    expect(await expandZipFiles([brokenZip])).toEqual({ images: [], passthrough: [brokenZip], failedZips: [] })
+  })
+
+  it('reports a zip whose raw bytes cannot even be read as failed, instead of passing it through', async () => {
+    const hugeZip: ZipEntryFile = {
+      name: 'huge.zip',
+      type: 'application/zip',
+      arrayBuffer: () => Promise.reject(new Error('not enough memory')),
+    }
+    expect(await expandZipFiles([hugeZip])).toEqual({ images: [], passthrough: [], failedZips: ['huge.zip'] })
   })
 })
